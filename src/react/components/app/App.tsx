@@ -3,20 +3,24 @@
  * Licensed under the MIT License.
  */
 
-import React, { JSX, useContext, useEffect, useState, useRef } from "react";
+import React, { JSX, useContext, useEffect, useState } from "react";
+import { ConnectionState, IFluidContainer, TreeView } from "fluid-framework";
 import { App } from "../../../schema/appSchema.js";
 import "../../../output.css";
 import "../../../styles/ios-minimal.css";
-// import "../../../styles/ios-fixes.css";
-// import "../../../styles/ios-safari-fixes.css";
-// import { fixIOSZIndexIssues } from "../../../utils/iosZIndexFix.js";
-import { ConnectionState, IFluidContainer, TreeView } from "fluid-framework";
-import { Canvas } from "../canvas/Canvas.js";
 import type { SelectionManager } from "../../../presence/Interfaces/SelectionManager.js";
-import { undoRedo } from "../../../undo/undo.js";
-import { useSelectionSync, useMultiTypeSelectionSync } from "../../../utils/eventSubscriptions.js";
-import { DragAndRotatePackage } from "../../../presence/drag.js";
+import type { UsersManager } from "../../../presence/Interfaces/UsersManager.js";
+import type { DragManager } from "../../../presence/Interfaces/DragManager.js";
+import type { DragAndRotatePackage } from "../../../presence/drag.js";
+import type { ResizeManager, ResizePackage } from "../../../presence/Interfaces/ResizeManager.js";
+import type { CursorManager } from "../../../presence/Interfaces/CursorManager.js";
+import type { InkPresenceManager } from "../../../presence/Interfaces/InkManager.js";
 import { TypedSelection } from "../../../presence/selection.js";
+import { undoRedo } from "../../../undo/undo.js";
+import { useTree } from "../../hooks/useTree.js";
+import { PresenceContext } from "../../contexts/PresenceContext.js";
+import { AuthContext } from "../../contexts/AuthContext.js";
+import { signOutHelper, switchAccountHelper } from "../../../infra/auth.js";
 import {
 	Avatar,
 	AvatarGroup,
@@ -30,29 +34,9 @@ import { ToolbarDivider } from "@fluentui/react-toolbar";
 import { Tooltip } from "@fluentui/react-tooltip";
 import { Menu, MenuTrigger, MenuPopover, MenuList, MenuItem } from "@fluentui/react-menu";
 import { SignOut20Regular, PersonSwap20Regular } from "@fluentui/react-icons";
-import { User, UsersManager } from "../../../presence/Interfaces/UsersManager.js";
-import { PresenceContext } from "../../contexts/PresenceContext.js";
-import { AuthContext } from "../../contexts/AuthContext.js";
-import { signOutHelper, switchAccountHelper } from "../../../infra/auth.js";
-import { DragManager } from "../../../presence/Interfaces/DragManager.js";
-import { ResizeManager } from "../../../presence/Interfaces/ResizeManager.js";
-import { ResizePackage } from "../../../presence/Interfaces/ResizeManager.js";
-import { CursorManager } from "../../../presence/Interfaces/CursorManager.js";
-import { CommentPane, CommentPaneRef } from "../panels/CommentPane.js";
-import { useTree } from "../../hooks/useTree.js";
-import { useKeyboardShortcuts } from "../../hooks/useKeyboardShortcuts.js";
-import { useAppKeyboardShortcuts } from "../../hooks/useAppKeyboardShortcuts.js";
-import { PaneContext } from "../../contexts/PaneContext.js";
-import { AppToolbar } from "../toolbar/AppToolbar.js";
-import { InkPresenceManager } from "../../../presence/Interfaces/InkManager.js";
-// Removed circle ink creation; ink tool toggles freehand drawing.
+import { User } from "../../../presence/Interfaces/UsersManager.js";
 
-// Context for comment pane actions
-export const CommentPaneContext = React.createContext<{
-	openCommentPaneAndFocus: (itemId: string) => void;
-} | null>(null);
-
-export function ReactApp(props: {
+interface ReactAppProps {
 	tree: TreeView<typeof App>;
 	itemSelection: SelectionManager<TypedSelection>;
 	tableSelection: SelectionManager<TypedSelection>;
@@ -63,246 +47,150 @@ export function ReactApp(props: {
 	resize: ResizeManager<ResizePackage | null>;
 	cursor: CursorManager;
 	ink?: InkPresenceManager;
-}): JSX.Element {
-	const {
-		tree,
-		itemSelection,
-		tableSelection,
-		users,
-		container,
-		undoRedo,
-		drag,
-		resize,
-		cursor,
-		ink,
-	} = props;
-	const [connectionState, setConnectionState] = useState("");
-	const [saved, setSaved] = useState(false);
-	const [canvasSize, setCanvasSize] = useState({ width: 0, height: 0 });
-	const [commentPaneHidden, setCommentPaneHidden] = useState(true);
-	const [zoom, setZoom] = useState(1);
-	const [pan, setPan] = useState({ x: 0, y: 0 });
-	// Start with ink mode enabled by default so users can draw immediately.
-	const [inkActive, setInkActive] = useState(true);
-	const [eraserActive, setEraserActive] = useState(false);
-	const [inkColor, setInkColor] = useState<string>("#2563eb");
-	const [inkWidth, setInkWidth] = useState<number>(4);
-	const [shapeColor, setShapeColor] = useState<string>("#FF0000"); // Default to red
+}
 
-	// Keep linter satisfied until pan is surfaced elsewhere
-	useEffect(() => {
-		void pan;
-	}, [pan]);
-	const [selectedItemId, setSelectedItemId] = useState<string>("");
-	const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
-	const [selectedColumnId, setSelectedColumnId] = useState<string>("");
-	const [selectedRowId, setSelectedRowId] = useState<string>("");
-	const [view] = useState<TreeView<typeof App>>(tree);
-	const [canUndo, setCanUndo] = useState(false);
-	const [canRedo, setCanRedo] = useState(false);
-	const commentPaneRef = useRef<CommentPaneRef>(null);
+export function ReactApp({
+	tree,
+	itemSelection,
+	tableSelection,
+	users,
+	container,
+	undoRedo,
+	drag,
+	resize,
+	cursor,
+	ink,
+}: ReactAppProps): JSX.Element {
+	useTree(tree.root, true);
 
-	// Function to open comment pane and focus input
-	const openCommentPaneAndFocus = (itemId: string) => {
-		setSelectedItemId(itemId);
-		setCommentPaneHidden(false);
-		// Use setTimeout to ensure the pane is rendered before focusing
-		setTimeout(() => {
-			commentPaneRef.current?.focusInput();
-		}, 0);
-	};
+	const sessionTitle = tree.root.metadata?.title ?? "Ready for vibe coding";
+	const sessionTagline =
+		tree.root.metadata?.tagline ??
+		"This template wires up authentication, Fluid data, and real-time presence so you can focus on crafting your experience.";
 
-	useTree(tree.root);
-	useTree(view.root.items);
-	useTree(view.root.comments);
-	// Subscribe to ink strokes so toolbar actions inserting ink trigger re-render
-	useTree(view.root.inks);
+	const [connectionState, setConnectionState] = useState(() =>
+		formatConnectionState(container.connectionState)
+	);
+	const [saved, setSaved] = useState(!container.isDirty);
 
 	useEffect(() => {
-		const updateConnectionState = () => {
-			if (container.connectionState === ConnectionState.Connected) {
-				setConnectionState("connected");
-			} else if (container.connectionState === ConnectionState.Disconnected) {
-				setConnectionState("disconnected");
-			} else if (container.connectionState === ConnectionState.EstablishingConnection) {
-				setConnectionState("connecting");
-			} else if (container.connectionState === ConnectionState.CatchingUp) {
-				setConnectionState("catching up");
-			}
+		const handleConnectionState = () =>
+			setConnectionState(formatConnectionState(container.connectionState));
+		const handleDirty = () => setSaved(false);
+		const handleSaved = () => setSaved(true);
+
+		container.on("connected", handleConnectionState);
+		container.on("disconnected", handleConnectionState);
+		container.on("dirty", handleDirty);
+		container.on("saved", handleSaved);
+		container.on("disposed", handleConnectionState);
+
+		return () => {
+			container.off("connected", handleConnectionState);
+			container.off("disconnected", handleConnectionState);
+			container.off("dirty", handleDirty);
+			container.off("saved", handleSaved);
+			container.off("disposed", handleConnectionState);
 		};
-		updateConnectionState();
-		setSaved(!container.isDirty);
-		container.on("connected", updateConnectionState);
-		container.on("disconnected", updateConnectionState);
-		container.on("dirty", () => setSaved(false));
-		container.on("saved", () => setSaved(true));
-		container.on("disposed", updateConnectionState);
 	}, [container]);
 
-	/** Unsubscribe to undo-redo events when the component unmounts */
-	useEffect(() => {
-		// Update undo/redo state whenever commits occur
-		const updateUndoRedoState = () => {
-			setCanUndo(undoRedo.canUndo());
-			setCanRedo(undoRedo.canRedo());
-		};
+	useEffect(() => () => undoRedo.dispose(), [undoRedo]);
 
-		// Initial update
-		updateUndoRedoState();
-
-		// Listen for commits to update undo/redo state
-		const unsubscribe = tree.events.on("commitApplied", updateUndoRedoState);
-
-		// Cleanup function
-		return () => {
-			unsubscribe();
-			undoRedo.dispose();
-		};
-	}, [tree.events, undoRedo]);
-
-	useEffect(() => {
-		// View changed
-	}, [view]);
-
-	// Initialize iOS Safari z-index fixes
-	useEffect(() => {
-		// Temporarily disabled to debug toolbar visibility
-		// fixIOSZIndexIssues();
-	}, []);
-
-	// Use unified selection sync for item selection state management
-	useSelectionSync(
-		itemSelection,
-		(selections) => {
-			const selectedIds = selections.map((sel) => sel.id);
-			// Update both states for backwards compatibility
-			setSelectedItemIds(selectedIds);
-			setSelectedItemId(selectedIds.length > 0 ? selectedIds[0] : "");
-		},
-		[view]
-	);
-
-	// Use multi-type selection sync for table selection state management
-	useMultiTypeSelectionSync(tableSelection, {
-		column: (selections) => setSelectedColumnId(selections[0]?.id ?? ""),
-		row: (selections) => setSelectedRowId(selections[0]?.id ?? ""),
-	});
-
-	// Keyboard shortcuts
-	const shortcuts = useAppKeyboardShortcuts({
-		view,
-		canvasSize,
-		pan,
-		zoom,
-		shapeColor,
-		selectedItemId,
-		selectedItemIds,
-		selectedColumnId,
-		selectedRowId,
-		commentPaneHidden,
-		undoRedo,
-		users,
-		canUndo,
-		canRedo,
-		setCommentPaneHidden,
-		openCommentPaneAndFocus,
-		selectionManager: itemSelection,
-	});
-
-	useKeyboardShortcuts({
-		shortcuts,
-	});
-
-	return (
-		<PresenceContext.Provider
-			value={{
-				users: users,
-				itemSelection: itemSelection,
-				tableSelection: tableSelection,
-				drag: drag,
-				resize: resize,
-				cursor: cursor,
-				branch: view !== tree,
-				ink: ink,
-			}}
-		>
-			<CommentPaneContext.Provider value={{ openCommentPaneAndFocus }}>
-				<div
-					id="main"
-					className="flex flex-col bg-transparent h-screen w-full overflow-hidden overscroll-none"
-				>
-					<Header saved={saved} connectionState={connectionState} />
-					{/* <div style={{ position: "relative", zIndex: 9999, isolation: "isolate" }}> */}
-					<AppToolbar
-						view={view}
-						tree={tree}
-						canvasSize={canvasSize}
-						selectedItemId={selectedItemId}
-						selectedItemIds={selectedItemIds}
-						selectedColumnId={selectedColumnId}
-						selectedRowId={selectedRowId}
-						commentPaneHidden={commentPaneHidden}
-						setCommentPaneHidden={setCommentPaneHidden}
-						undoRedo={undoRedo}
-						canUndo={canUndo}
-						canRedo={canRedo}
-						tableSelection={tableSelection}
-						zoom={zoom}
-						onZoomChange={setZoom}
-						pan={pan}
-						inkActive={inkActive}
-						onToggleInk={() => setInkActive((a) => !a)}
-						eraserActive={eraserActive}
-						onToggleEraser={() => setEraserActive((a) => !a)}
-						inkColor={inkColor}
-						onInkColorChange={setInkColor}
-						inkWidth={inkWidth}
-						onInkWidthChange={setInkWidth}
-						shapeColor={shapeColor}
-						onShapeColorChange={setShapeColor}
-					/>
-					{/* </div> */}
-					<div className="canvas-container flex h-[calc(100vh-96px)] w-full flex-row ">
-						<PaneContext.Provider
-							value={{
-								panes: [{ name: "comments", visible: !commentPaneHidden }],
-							}}
-						>
-							<Canvas
-								items={view.root.items}
-								container={container}
-								setSize={(width, height) => setCanvasSize({ width, height })}
-								zoom={zoom}
-								onZoomChange={setZoom}
-								onPanChange={setPan}
-								inkActive={inkActive}
-								eraserActive={eraserActive}
-								inkColor={inkColor}
-								inkWidth={inkWidth}
-							/>
-						</PaneContext.Provider>
-						<CommentPane
-							ref={commentPaneRef}
-							hidden={commentPaneHidden}
-							setHidden={setCommentPaneHidden}
-							itemId={selectedItemId}
-							app={view.root}
+		return (
+			<PresenceContext.Provider
+				value={{
+					users,
+					itemSelection,
+					tableSelection,
+					drag,
+					resize,
+					cursor,
+					branch: false,
+					ink,
+				}}
+			>
+				<div className="flex min-h-screen flex-col bg-slate-50 text-neutral-900">
+					<Header saved={saved} connectionState={connectionState} title={sessionTitle} />
+					<main className="relative flex flex-1 justify-center overflow-hidden">
+						<div
+							className="pointer-events-none absolute left-1/2 top-[-10%] h-80 w-[120%] -translate-x-1/2 rounded-full bg-gradient-to-r from-pink-200 via-purple-200 to-sky-200 opacity-60 blur-3xl"
+							aria-hidden
 						/>
-					</div>
+						<div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-16 md:px-10 lg:py-24">
+							<div className="mx-auto max-w-2xl space-y-4 text-center">
+								<Text weight="semibold" className="text-3xl md:text-4xl">
+									{sessionTitle}
+								</Text>
+								<Text className="text-base text-neutral-600 md:text-lg">{sessionTagline}</Text>
+							</div>
+							<section className="grid gap-6 rounded-3xl border border-white/60 bg-white/80 p-8 shadow-xl backdrop-blur-sm sm:grid-cols-2">
+								<TemplateCallout
+									title="Tree data"
+									body="Use the `tree` prop provided to `ReactApp` to bind your own SharedTree views. Subscribe with the `useTree` hook to keep components in sync."
+								/>
+								<TemplateCallout
+									title="Presence services"
+									body="Access cursors, selections, ink, and user lists from `PresenceContext`. Add collaborative flourishes without re-implementing the basics."
+								/>
+								<TemplateCallout
+									title="Auth & tokens"
+									body="The `AuthContext` surfaces the MSAL instance so you can call Graph or other APIs. Customize the header or plug in additional account-aware UI."
+								/>
+								<TemplateCallout
+									title="Schema playground"
+									body="The root schema currently exposes only `metadata`. Add shared objects in `appSchema.ts`, update `createInitialAppState`, and wire them into this component to bring your ideas to life."
+								/>
+							</section>
+						</div>
+					</main>
 				</div>
-			</CommentPaneContext.Provider>
-		</PresenceContext.Provider>
+			</PresenceContext.Provider>
+		);
+}
+
+function formatConnectionState(state: ConnectionState): string {
+	switch (state) {
+		case ConnectionState.Connected:
+			return "connected";
+		case ConnectionState.Disconnected:
+			return "disconnected";
+		case ConnectionState.EstablishingConnection:
+			return "connecting";
+		case ConnectionState.CatchingUp:
+			return "syncing";
+		default:
+			return "unknown";
+	}
+}
+
+interface TemplateCalloutProps {
+	title: string;
+	body: string;
+}
+
+function TemplateCallout({ title, body }: TemplateCalloutProps): JSX.Element {
+	return (
+		<div className="flex h-full flex-col justify-between space-y-2 rounded-2xl border border-slate-100 bg-white/90 p-5 shadow-sm">
+			<Text weight="semibold" className="text-sm uppercase tracking-wide text-neutral-500">
+				{title}
+			</Text>
+			<Text className="text-base leading-relaxed text-neutral-700">{body}</Text>
+		</div>
 	);
 }
 
-export function Header(props: { saved: boolean; connectionState: string }): JSX.Element {
-	const { saved, connectionState } = props;
+export function Header(props: {
+	saved: boolean;
+	connectionState: string;
+	title: string;
+}): JSX.Element {
+	const { saved, connectionState, title } = props;
 
 	return (
 		<div className="h-[48px] flex shrink-0 flex-row items-center justify-between bg-black text-base text-white z-[9999] w-full text-nowrap">
 			<div className="flex items-center">
 				<div className="flex ml-2 mr-8">
-					<Text weight="bold">Fluid Framework Demo</Text>
+					<Text weight="bold">{title}</Text>
 				</div>
 			</div>
 			<div className="flex flex-row items-center m-2">

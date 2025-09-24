@@ -96,56 +96,58 @@ export function ReactApp({
 
 	useEffect(() => () => undoRedo.dispose(), [undoRedo]);
 
-		return (
-			<PresenceContext.Provider
-				value={{
-					users,
-					itemSelection,
-					tableSelection,
-					drag,
-					resize,
-					cursor,
-					branch: false,
-					ink,
-				}}
-			>
-				<div className="flex min-h-screen flex-col bg-slate-50 text-neutral-900">
-					<Header saved={saved} connectionState={connectionState} title={sessionTitle} />
-					<main className="relative flex flex-1 justify-center overflow-hidden">
-						<div
-							className="pointer-events-none absolute left-1/2 top-[-10%] h-80 w-[120%] -translate-x-1/2 rounded-full bg-gradient-to-r from-pink-200 via-purple-200 to-sky-200 opacity-60 blur-3xl"
-							aria-hidden
-						/>
-						<div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-16 md:px-10 lg:py-24">
-							<div className="mx-auto max-w-2xl space-y-4 text-center">
-								<Text weight="semibold" className="text-3xl md:text-4xl">
-									{sessionTitle}
-								</Text>
-								<Text className="text-base text-neutral-600 md:text-lg">{sessionTagline}</Text>
-							</div>
-							<section className="grid gap-6 rounded-3xl border border-white/60 bg-white/80 p-8 shadow-xl backdrop-blur-sm sm:grid-cols-2">
-								<TemplateCallout
-									title="Tree data"
-									body="Use the `tree` prop provided to `ReactApp` to bind your own SharedTree views. Subscribe with the `useTree` hook to keep components in sync."
-								/>
-								<TemplateCallout
-									title="Presence services"
-									body="Access cursors, selections, ink, and user lists from `PresenceContext`. Add collaborative flourishes without re-implementing the basics."
-								/>
-								<TemplateCallout
-									title="Auth & tokens"
-									body="The `AuthContext` surfaces the MSAL instance so you can call Graph or other APIs. Customize the header or plug in additional account-aware UI."
-								/>
-								<TemplateCallout
-									title="Schema playground"
-									body="The root schema currently exposes only `metadata`. Add shared objects in `appSchema.ts`, update `createInitialAppState`, and wire them into this component to bring your ideas to life."
-								/>
-							</section>
+	return (
+		<PresenceContext.Provider
+			value={{
+				users,
+				itemSelection,
+				tableSelection,
+				drag,
+				resize,
+				cursor,
+				branch: false,
+				ink,
+			}}
+		>
+			<div className="flex min-h-screen flex-col bg-slate-50 text-neutral-900">
+				<Header saved={saved} connectionState={connectionState} title={sessionTitle} />
+				<main className="relative flex flex-1 justify-center overflow-hidden">
+					<div
+						className="pointer-events-none absolute left-1/2 top-[-10%] h-80 w-[120%] -translate-x-1/2 rounded-full bg-gradient-to-r from-pink-200 via-purple-200 to-sky-200 opacity-60 blur-3xl"
+						aria-hidden
+					/>
+					<div className="relative z-10 mx-auto flex w-full max-w-5xl flex-col gap-12 px-6 py-16 md:px-10 lg:py-24">
+						<div className="mx-auto max-w-2xl space-y-4 text-center">
+							<Text weight="semibold" className="text-3xl md:text-4xl">
+								{sessionTitle}
+							</Text>
+							<Text className="text-base text-neutral-600 md:text-lg">
+								{sessionTagline}
+							</Text>
 						</div>
-					</main>
-				</div>
-			</PresenceContext.Provider>
-		);
+						<section className="grid gap-6 rounded-3xl border border-white/60 bg-white/80 p-8 shadow-xl backdrop-blur-sm sm:grid-cols-2">
+							<TemplateCallout
+								title="Tree data"
+								body="Use the `tree` prop provided to `ReactApp` to bind your own SharedTree views. Subscribe with the `useTree` hook to keep components in sync."
+							/>
+							<TemplateCallout
+								title="Presence services"
+								body="Access cursors, selections, ink, and user lists from `PresenceContext`. Add collaborative flourishes without re-implementing the basics."
+							/>
+							<TemplateCallout
+								title="Auth & tokens"
+								body="The `AuthContext` surfaces the MSAL instance so you can call Graph or other APIs. Customize the header or plug in additional account-aware UI."
+							/>
+							<TemplateCallout
+								title="Schema playground"
+								body="The root schema currently exposes only `metadata`. Add shared objects in `appSchema.ts`, update `createInitialAppState`, and wire them into this component to bring your ideas to life."
+							/>
+						</section>
+					</div>
+				</main>
+			</div>
+		</PresenceContext.Provider>
+	);
 }
 
 function formatConnectionState(state: ConnectionState): string {

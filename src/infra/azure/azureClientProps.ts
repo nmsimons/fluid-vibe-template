@@ -12,9 +12,19 @@ import type {
 import { InsecureTokenProvider } from "./azureTokenProvider.js";
 import { AzureFunctionTokenProvider, azureUser, user } from "./azureTokenProvider.js";
 
-const client = process.env.FLUID_CLIENT;
-const local = client === undefined || client === "local";
-if (local) {
+const azureEnvVars = [
+	"AZURE_CLIENT_ID",
+	"AZURE_REDIRECT_URI",
+	"AZURE_TENANT_ID",
+	"AZURE_FUNCTION_TOKEN_PROVIDER_URL",
+	"AZURE_ORDERER",
+];
+
+const requestedClient = process.env.FLUID_CLIENT;
+const azureConfigAvailable = azureEnvVars.every((envKey) => Boolean(process.env[envKey]));
+const useLocalClient = requestedClient === "local" || !azureConfigAvailable;
+
+if (useLocalClient) {
 	console.warn(`Configured to use local tinylicious.`);
 }
 
@@ -38,9 +48,8 @@ export function getClientProps(
 		endpoint: process.env.AZURE_ORDERER!,
 	};
 
-	const connectionConfig: AzureRemoteConnectionConfig | AzureLocalConnectionConfig = !local
-		? remoteConnectionConfig
-		: localConnectionConfig;
+	const connectionConfig: AzureRemoteConnectionConfig | AzureLocalConnectionConfig =
+		!useLocalClient ? remoteConnectionConfig : localConnectionConfig;
 
 	return {
 		connection: connectionConfig,

@@ -23,6 +23,7 @@ build/
 .env.development.local
 .env.test.local
 .env.production.local
+*.nope
 
 # IDE and editor files
 # Keep .vscode/settings.json for project-specific VS Code settings

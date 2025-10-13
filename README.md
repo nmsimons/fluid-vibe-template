@@ -119,6 +119,26 @@ npm run build       # Production Vite bundle
 
 ---
 
+## Tailwind CSS
+
+- `src/index.css` holds the Tailwind directives and any custom layers.
+- `src/output.css` is the compiled artifact committed to the repo so the app loads Tailwind styles without a build.
+- Rebuild the compiled CSS after changing `index.css`:
+
+    ```powershell
+    npm run tailwind:watch
+    ```
+
+- When you just need a one-off build:
+
+    ```powershell
+    npm run tailwind:build
+    ```
+
+- Prefer the underlying CLI? It maps 1:1 to `@tailwindcss/cli -i ./src/index.css -o ./src/output.css`.
+
+---
+
 ## Next steps
 
 - Design your collaborative UI (canvas, boards, dashboards, etc.).
